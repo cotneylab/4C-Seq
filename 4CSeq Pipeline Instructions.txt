@@ -1,0 +1,149 @@
+Guide to Run Jun's modification of the 4C-Seq Analysis Pipeline
+
+-----------------------------
+Scripts & Files required
+-----------------------------
+1. bam files for each viewpoint, condition, and replicate
+2. Parameter files for each viewpoint
+3. Script 1: run_fourcseq_workflow_141209.R
+4. Script 2: make_4cseq_parameters_012615.pl
+5. Script 3: make_4cseq_workflow_150121.pl
+6. Script 4: FilterInteractions_030315.R
+
+
+-----------------------------
+Generating the Parameter Files
+-----------------------------
+The parameter file should have these tab-separated column names:
+"Viewpoint	Fprimer	Rprimer	Conditions	Bams	reSeq1	reSeq2	resultfile"
+
+Each viewpoint takes a single row following these header. Each entry should follow this format, separated by a tab:
+
+{viewpoint name} {forward primer sequence} {reverse primer sequence} {condition names} {bam file names} {first restriction sequence} {second restriction sequence} {name of output result file}
+
+	{viewpoint name} is the user-chosen name of your viewpoint
+	{forward primer sequence} is the sequence of your forward primer
+	{reverse primer sequence} is the sequence of your reverse primer
+	{condition names} is a semicolon-separated list of user-chosen names for each condition in the viewpoint; this list should be order-matched with the list of bam files, including replicates; there cannot be a space between semicolons; the last entry cannot be followed with a semicolon
+	{bam file names} is a semicolon-separated list of bam file names that correspond to the list of condition names; this list should be order-matched with the list of bam files; there cannot be a space between semicolons; the last entry cannot be followed with a semicolon
+	{first restriction sequence} is the sequence of your first restriction enzyme
+	{second restriction sequence} is the sequence of your second restriction enzyme
+	{name of output result file} is the desired name for your output result file
+
+Here is an example of a viewpoint entry in a parameter file:
+CRM_3068	CGAGAGTCCTCAACTCTGGC	CGGATTTGGGAGAGGGAACG	MESO_6-8;MESO_6-8;WE_3-4;WE_3-4	CRM_3068_MESO_6-8h.bam;CRM_3068_MESO_6-8h.bam;CRM_3068_WE_3-4h_1.bam;CRM_3068_WE_3-4h_2.bam	GATC	CATG	CRM3068_DS1.1_results.txt
+
+This file can be saved with whatever name you want. 
+
+
+-----------------------------
+Editing the Pipeline 
+-----------------------------
+The "run_fourcseq_workflow_141209.R" file runs the actual 4C-Seq pipeline on each viewpoint. You can edit a number of parameters here.
+
+	8 source("/home/jy344/Programs/Scripts/4CSeq/fourcseq_revised_code.R")
+
+This line contains a link to the file.R that contains all the functions used in the R code. You can use this to determine how to pass parameters that should be changed.
+
+	39 fc<-countFragmentOverlaps_edi(fc, trim=4, minMapq=-1)
+
+These parameters must be changed if you're not using a 4bp RE cutter.
+
+	49 fcf <- getZScores(fc, minCount=29)
+
+These parameters can be changed if you want to alter the minimum threshold reads/fragment required to pass.
+
+	53 fcf <- addPeaks(fcf, zScoreThresh=3, fdrThresh=0.1)
+
+These parameters can be changed if you want to alter the Z-Score and FDR thresholds. 
+
+
+-----------------------------
+Generating proper file structure and commands for the pipeline
+-----------------------------
+Prior to running the pipeline, a specific folder structure must be generated that the pipeline can understand. 
+
+1. Create a folder to run the pipeline within
+2. Move your parameter file to this folder
+3. Run the "make_4cseq_parameters_012615.pl" script with:
+
+	$ perl make_4cseq_parameters_012615.pl {parameter file}
+	
+For each viewpoint in the parameters file, this should generate a new folder named the {viewpoint name}. Within each viewpoint folder, there will be: a formatted {viewpoint}_parameters.txt file, a folder (“primers”) with text files of the primers to use for that viewpoint, and an empty folder (“bam”) for the bam files. If any of these aren't here, something hasn't worked.
+
+You may need to modify the perl script to change the reference genome used. This can be done easily on line 7 of the script:
+
+	6 #Edit this one if needed
+	7 my $genomefastafile="/home/jy344/Genomes/dm3/dm3.fa"; 
+
+4. Run the "perl make_4cseq_workflow_150121.pl" script with:
+
+	$ perl make_4cseq_workflow_012615.pl {parameter file} {current folder} {name of shell script to run pipeline} {name of script to move bam files}
+
+	{parameter file} is the location/name of your parameter file
+	{current folder} is the absolute path of the current folder
+	{name of the shell script to run the pipeline} is whatever name you want the output script that runs the pipeline to be called
+	{name of script to move bam files} is whatever name you want the output script that moves the bam files to be called
+
+This scripts generates a shell script to (1) move bam files to their respective subfolder locations for each viewpoint and (2) commands to run the 4C-Seq pipeline on each viewpoint. As such, it will serve as a gateway for making any necessary changes to the pipeline if you modify any parameters or rename any scripts utilized by the code. If, after running this command, two scripts with the designated output names have not been generated, then something has gone wrong.
+
+Here are a few parts of the code that you will most likely want to change: 
+	
+	7 my $fourceseq="/home/jy344/Programs/Scripts/4CSeq/run_fourcseq_workflow_141209.R";
+
+This line references the Rscript that runs the pipeline itself. This must point to the Rscript you want to use.
+
+	24 print OUT "source ~/.bashrc;cd $folder/$array[0];/home/jy344/Programs/R-3.1.2/bin/Rscript $fourceseq $array[0]_parameters.txt\n";
+
+This line generates the command output to the first shell script file that runs the pipeline. You may want to change which Rscript install is used by modifying "/home/jy344/Programs/R-3.1.2/bin/Rscript". 
+
+	25 print OUT2 "mv bam/*$array[0]*.bam $array[0]/bam/\n";
+
+This line generates the command output to the second shell script file that moves the bam files. Depending on your file structure, you can change the first term ("bam/*$array[0]*.bam") to match the location of your files. 
+
+5. To move the bam files into place, run the following code in the folder that contains all your viewpoint folders and 'master' parameter file (ie. the one with all viewpoints):
+	
+	$ sh {name of script to move bam files}
+
+Check to make sure that, for each viewpoint, all the bam files were successfully moved to {viewpoint}/bam
+
+
+-----------------------------
+Running the Pipeline
+-----------------------------
+To run the pipeline, run the following code in the folder that contains all your viewpoint folders and 'master' parameter file (ie. the one with all viewpoints):
+
+	$ sh {name of shell script to run pipeline} 
+
+After this runs, each viewpoint folder should populate with results: 
+	{Viewpoint}_results.txt: contains interaction fragments with location and statistics for ALL conditions in the viewpoint
+	{Viewpoint}_results_fit_{#}.pdf: shows the regression for each condition/replication from the left side, the right side, and combined. 
+	{Viewpoint}_results_peaks.pdf: shows the constructed model for all conditions with highlighted interactions that may be positive hits based on the input cutoffs from the Rscript (note: we haven't changed these from default since we do the filtering later - they should currently be @ zScoreThresh=3 & fdrThresh=0.1)
+	{Viewpoint}_results_scatterplot.pdf: Shows, for one condition, the consistency between replicates.
+
+If these results aren't all there, something has gone wrong.
+
+
+-----------------------------
+Filtering the Results
+-----------------------------
+To filter the fragments based on Z-Score, P-Value, or Q-Value, you can run the following from the folder that contains all your viewpoint folders and 'master' parameter file (ie. the one with all viewpoints):
+
+Rscript FilterInteractions_030315.R {results.txt} {conditions} {Z Cutoff} {P Cutoff} {Q Cutoff}
+
+	{ResultFile} is the path to the results file containing all fragments
+	{# Conditions} is the number of conditions per viewpoint
+	{# Replicates} is the number of replicates per condition
+	{Z Cutoff} is desired cutoff (ie. fragment_ZScore <= Z Cutoff)
+	{P Cutoff} is desired cutoff (ie. fragment_pVal <= P Cutoff)
+	{Q Cutoff} is desired cutoff (ie. fragment_QScore <= Q Cutoff)
+
+	# NOTE: The Z-Score cutoff for this script is currently commented out!!
+
+This script will create a "results" folder and populate it with bed files of all fragments that passed the cutoffs for EACH condition and viewpoint. Additionally, it will generate a .txt file that contains the stat info for each fragment that passed the cutoffs. These files are named as follows: 
+
+	{Viewpoint}_forward_{Condition}_Z{Z Cutoff}_p{P Cutoff}_Q{Q Cutoff}.bed
+
+
+
+

@@ -1,0 +1,21 @@
+
+#parameters
+#necessary files/folders
+projectname= "h280"
+primerFile = "primers/h280_primers.fas"
+firstprimer = "h280_forward"
+referenceGenomeFile = "/home/jy344/Genomes/mm9/dna/mm9_nh.fa"
+bamFilePath = "bam"
+bamfiles=c("Cortex_L_h280_trimmed.bam","Cortex_L_h280_trimmed_rep2.bam","Limb_L_h280_trimmed.bam","Limb_L_h280_trimmed_rep2.bam")
+
+conditions=c("Cortex","Cortex","Limb","Limb")
+replicates=c("1","2","1","2")
+
+reSequence1="CATG"
+reSequence2="GATC"
+
+resultfile="h280_results.txt"
+scatterplotfile=sub(".txt","_scatterplot.pdf",resultfile)
+fitplotfile=sub(".txt","_fit.pdf",resultfile)
+peakplotfile=sub(".txt","_peaks.pdf",resultfile)
+
